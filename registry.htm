@@ -1,0 +1,270 @@
+<!doctype html>
+<!--
+<htmlApplication
+  applicationName="Registry"
+  fixedSize="no"
+  width=900
+  height=500
+  menu="no" />
+-->
+<html>
+<head>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<link rel="stylesheet" type="text/css" href="registry.css">
+<script type="text/javascript">
+var path;
+var RootKey;
+var Registry;
+    
+function browsedirect(s)
+{
+  path = s;
+  populate();
+}
+
+function browsebase(s)
+{
+  path = s;
+  path += "\\";
+    
+  populate();
+}
+function browse(s)
+{
+  if(path.charAt(path.length-1)!='\\')
+  	path += "\\";
+  	
+  path += s;
+  
+  populate();
+}
+
+function populate()
+{
+  if(path=='')
+  {
+    a="Computer";
+  }
+  else
+  {
+    arr=path.split("\\");
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i] == '') {         
+        arr.splice(i, 1);
+        i--;
+      }
+    }
+  
+    last =arr.pop();
+    path2="";
+    a="<span onclick=\"browsedirect('')\"><a href='#'>Computer</a></span>&ensp;<span'>&gt;</span>&ensp;";
+    arr.forEach(function(value){
+    
+      if(value!='')
+      {    
+        path2+=value;
+        path2+="\\\\";
+           
+        a += "<span onclick=\"browsedirect('" + path2.replace(/\'/g,'\\\'') + "')\"><a href='#'>" + value + "</a></span>&ensp;<span>&gt;</span>&ensp;";
+      }
+    });
+
+    a += last;
+  }
+
+  s = "<div class=\"drive\">" + a + "</div>"; 
+  
+  document.getElementById("location").innerHTML=s;
+  
+  if(path=="")
+  {
+    s = "";
+    
+    var keys = ["HKEY_CLASSES_ROOT","HKEY_CURRENT_USER","HKEY_LOCAL_MACHINE","HKEY_USERS","HKEY_CURRENT_CONFIG"];
+    for(var i=0;i<keys.length;i++)
+    {
+       s += "<div class=\"drive\" onclick=\"browsebase('" + keys[i].replace(/\'/g,'\\\'') + "')\"><a href='#'>" + keys[i] + "</a></div>"; 
+    }  
+    
+    document.getElementById("leftcontent").innerHTML=s;
+    
+    document.getElementById("rightcontent").innerHTML="";
+  }
+  else
+  {
+    DisplaySubKeys(path);
+
+    DisplayValues(path);
+  }
+  
+  resize();
+}
+ 
+function DisplaySubKeys (RegKey) {
+  var RootVal = RootKey[RegKey.substr(0, RegKey.indexOf("\\"))];
+  if (RootVal != undefined) {
+    Method = Registry.Methods_.Item("EnumKey");
+    p_In = Method.InParameters.SpawnInstance_();
+    p_In.hDefKey = RootVal;
+    p_In.sSubKeyName = RegKey.substr(RegKey.indexOf("\\") + 1)
+    p_Out = Registry.ExecMethod_(Method.Name, p_In);
+    var content="";
+    if(p_Out.sNames!=null)
+    {
+      arr=p_Out.sNames.toArray();
+      for(var i=0;i<arr.length;i++)
+      {
+        content += "<div class=\"drive\" onclick=\"browse('" + arr[i].replace(/\'/g,'\\\'') + "')\"><a href='#'>" + arr[i] + "</a></div>"; 
+      }
+    }
+    document.getElementById("leftcontent").innerHTML=content;
+  }
+}
+
+function DisplayValues (RegKey) {
+  var RootVal = RootKey[RegKey.substr(0, RegKey.indexOf("\\"))];
+  if (RootVal != undefined) {
+    Method = Registry.Methods_.Item("EnumValues");
+    p_In = Method.InParameters.SpawnInstance_();
+    p_In.hDefKey = RootVal;
+    p_In.sSubKeyName = RegKey.substr(RegKey.indexOf("\\") + 1)
+    p_Out = Registry.ExecMethod_(Method.Name, p_In);
+    
+    var content="";
+    if(p_Out.sNames!=null)
+    {
+      arrValues=p_Out.sNames.toArray();
+      arrTypes=p_Out.Types.toArray();
+  	  for(var i=0;i<arrValues.length;i++)
+  	  {
+  	    name="";
+  	    if(arrValues[i]=="")
+  	      name="(Default)";
+  	    else
+  	      name=arrValues[i];
+
+        var oInParams = Registry.Methods_("GetStringValue").Inparameters;
+        oInParams.Hdefkey = RootVal;
+        oInParams.Ssubkeyname = RegKey.substr(RegKey.indexOf("\\") + 1);
+        oInParams.Svaluename = arrValues[i];
+  	    
+  	    var oOutParams;
+  	    val="";
+  	    typeName="";
+  	    if(arrTypes[i]==1)
+  	    {
+  	      typeName="REG_SZ";
+  	      oOutParams = Registry.ExecMethod_("GetStringValue", oInParams, 0, null);
+  	      val = oOutParams.sValue;
+  	    }
+  	    else if(arrTypes[i]==2)
+  	    {
+  	      typeName="REG_EXPAND_SZ";
+  	      var oOutParams = Registry.ExecMethod_("GetExpandedStringValue", oInParams, 0, null);
+  	      val = oOutParams.sValue;
+  	      //var oOutParams2 = Registry.ExecMethod_("GetStringValue", oInParams, 0, null);
+  	      //val = " [" + oOutParams2.sValue + "]";
+  	    }
+  	    else if(arrTypes[i]==3)
+  	    {
+  	      typeName="REG_BINARY";
+  	      oOutParams = Registry.ExecMethod_("GetBinaryValue", oInParams, 0, null);
+  	      
+  	      var arrData=oOutParams.uValue.toArray();
+  	      
+  	      for(var s=0;s<arrData.length;s++)
+  	      {
+  	        c = arrData[s].toString(16);
+  	        if(c.length==1)
+  	          val += "0" + c + " ";
+  	        else
+  	          val += c + " ";
+  	      }
+  	    }
+  	    else if(arrTypes[i]==4)
+  	    {
+  	      typeName="REG_DWORD"
+  	      oOutParams = Registry.ExecMethod_("GetDWORDValue", oInParams, 0, null);
+  	      val = oOutParams.uValue.toString();
+  	    }
+  	    else if(arrTypes[i]==7)
+  	    {
+  	      typeName="REG_MULTI_SZ"
+  	      oOutParams = Registry.ExecMethod_("GetMultiStringValue", oInParams, 0, null);
+  	      var arrData=oOutParams.sValue.toArray();
+  	      for(var s=0;s<arrData.length;s++)
+  	      {
+  	        val += "[" + arrData[s] + "]";
+  	      }
+  	  
+  	    }
+        else if(arrTypes[i]==11)
+  	    {
+  	      typeName="REG_QWORD"
+  	      oOutParams = Registry.ExecMethod_("GetQWORDValue", oInParams, 0, null);
+  	      val = oOutParams.uValue.toString();
+  	    }  	      
+    
+  	    	
+      	content += "<div class=\"drive\"><span style=\"color:blue\">" + name + "</span>&ensp;<span style=\"color:brown\">" + typeName + "</span>&ensp;<span style=\"color:red\">" + val + "</span></div>";
+  	  }
+    }
+    document.getElementById("rightcontent").innerHTML=content;
+  
+  }
+}
+
+function load()
+{
+  RootKey = new Object();
+  RootKey["HKEY_CLASSES_ROOT"]   = 0x80000000;
+  RootKey["HKEY_CURRENT_USER"]   = 0x80000001;
+  RootKey["HKEY_LOCAL_MACHINE"]  = 0x80000002;
+  RootKey["HKEY_USERS"]          = 0x80000003;
+  RootKey["HKEY_CURRENT_CONFIG"] = 0x80000005;
+  
+  var Locator = new ActiveXObject("WbemScripting.SWbemLocator");
+  var ServerConn = Locator.ConnectServer(null, "root\\default");
+  Registry = ServerConn.Get("StdRegProv");
+  
+  path=""
+  try {
+    var shell=new ActiveXObject("wscript.shell");
+    path=shell.RegRead("HKCU\\Software\\HtmlApplicationByVbsedit\\Registry\\currentpath");
+  }
+  catch(e)  {
+    //alert(e);
+  }
+  
+  populate();
+}
+
+function unload()
+{
+  var shell=new ActiveXObject("wscript.shell");
+  shell.RegWrite("HKCU\\Software\\HtmlApplicationByVbsedit\\Registry\\currentpath",path);
+}
+
+function resize()
+{
+  document.getElementById("content").style.height=(window.innerHeight-document.getElementById("header").offsetHeight) + "px";
+}
+
+</script>
+</head>
+<body onunload="unload()" onload="load()" onresize="resize()">
+<div id="header">
+<div class="header" id="location">Location</div>
+</div>
+<div id="content" class="contents1">
+  <div id="leftcontent" style="background-color:white;width: 50%; float:left;word-wrap:break-word;">
+   #left content in here
+  </div>
+
+  <div id="rightcontent" style="background-color:white;width: 50%; float:right;word-wrap:break-word;">
+   #right content in there
+  </div>
+</div>
+
+</body>
+</html>
